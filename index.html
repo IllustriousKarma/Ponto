@@ -13,378 +13,395 @@
   <link rel="manifest" href="manifest.json" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0f172a; color: #e2e8f0; font-family: 'Inter','Segoe UI',sans-serif; min-height: 100vh; -webkit-tap-highlight-color: transparent; }
-    input, select, button { font-family: inherit; }
-    input:focus { border-color: #3b82f6 !important; outline: none; }
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    input[type="time"], input[type="date"], input[type="number"] {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      padding: 8px 10px;
+      font-size: 14px;
+      outline: none;
+      width: 100%;
+      color-scheme: dark;
+      font-family: inherit;
+    }
+    button {
+      font-family: inherit;
+      cursor: pointer;
+    }
+    input:focus { border-color: #3b82f6; }
   </style>
 </head>
 <body>
-<div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script>
-const { useState, useEffect } = React;
-const e = React.createElement;
-const STORAGE_KEY = "ponto-registros";
-const CONFIG_KEY  = "ponto-config";
+  <div id="root"></div>
 
-/* ── helpers ── */
-function toMin(hhmm) {
-  if (!hhmm) return null;
-  const [h,m] = hhmm.split(":").map(Number);
-  if (isNaN(h)||isNaN(m)) return null;
-  return h*60+m;
-}
-function fromMin(total) {
-  if (total===null||total===undefined) return "--:--";
-  const sign = total<0?"-":"";
-  const abs  = Math.abs(total);
-  return sign+String(Math.floor(abs/60)).padStart(2,"0")+":"+String(abs%60).padStart(2,"0");
-}
-function calcDia(pares) {
-  let tot=0;
-  for(const p of pares){
-    const a=toMin(p.entrada), b=toMin(p.saida);
-    if(a===null||b===null||b<=a) continue;
-    tot+=b-a;
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+  <script>
+  const { useState, useEffect } = React;
+  const STORAGE_KEY = "ponto-registros";
+  const CONFIG_KEY = "ponto-config";
+
+  function toMinutes(hhmm) {
+    if (!hhmm) return null;
+    const [h, m] = hhmm.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    return h * 60 + m;
   }
-  return tot;
-}
-function hoje(){ return new Date().toISOString().slice(0,10); }
-function fmtData(iso){ const[y,m,d]=iso.split("-"); return d+"/"+m+"/"+y; }
-const DS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-function fmtDia(iso){ return DS[new Date(iso+"T12:00:00").getDay()]; }
 
-function stGet(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch{return null;} }
-function stSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
-
-/* ── estilos base ── */
-const IS = { background:"#0f172a",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"8px 10px",fontSize:14,outline:"none",width:"100%",colorScheme:"dark" };
-const BS = { background:"#1e3a5f",border:"none",borderRadius:8,color:"#e2e8f0",padding:"8px 14px",cursor:"pointer",fontSize:13 };
-const LS = { fontSize:13,color:"#94a3b8",fontWeight:500 };
-
-/* ── ResumoCard ── */
-function ResumoCard({trabalhados,jornada,diferenca,reaisDiff,valorMin}){
-  const faltou=diferenca<0, cor=faltou?"#f87171":"#22c55e";
-  return e("div",{style:{background:"linear-gradient(135deg,#1e293b,#0f2540)",borderRadius:16,padding:20,border:"1px solid "+(faltou?"#7f1d1d":"#14532d")}},
-    e("div",{style:{fontSize:13,color:"#94a3b8",marginBottom:12,fontWeight:500}},"Resumo do dia"),
-    e("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},
-      e("span",{style:{color:"#94a3b8",fontSize:14}},"Trabalhado"),
-      e("span",{style:{fontWeight:600,fontSize:14}},fromMin(trabalhados))
-    ),
-    e("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:12}},
-      e("span",{style:{color:"#94a3b8",fontSize:14}},"Jornada"),
-      e("span",{style:{fontWeight:600,fontSize:14}},fromMin(jornada))
-    ),
-    e("div",{style:{height:1,background:"#1e3a5f",margin:"12px 0"}}),
-    e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
-      e("span",{style:{color:cor,fontWeight:700,fontSize:15}},faltou?"⚠️ Faltou":"✅ Banco"),
-      e("span",{style:{color:cor,fontWeight:800,fontSize:22}},(diferenca>=0?"+":"")+fromMin(diferenca))
-    ),
-    valorMin>0&&e("div",{style:{textAlign:"right",marginTop:4,fontSize:13,color:cor,opacity:0.85}},
-      faltou?"Desconto: ":"Banco em R$: ", e("strong",null,"R$ "+reaisDiff.toFixed(2))
-    ),
-    trabalhados===0&&e("div",{style:{fontSize:12,color:"#475569",marginTop:8,textAlign:"center"}},"Preencha as batidas acima para calcular")
-  );
-}
-
-
-/* ── SwipeCard ── */
-function SwipeCard({children, onDelete}){
-  const [offsetX, setOffsetX] = useState(0);
-  const [swiping, setSwiping] = useState(false);
-  const startX = React.useRef(null);
-  const THRESHOLD = 80;
-
-  function onTouchStart(ev){
-    startX.current = ev.touches[0].clientX;
-    setSwiping(true);
+  function fromMinutes(total) {
+    if (total === null || total === undefined) return "--:--";
+    const sign = total < 0 ? "-" : "";
+    const abs = Math.abs(total);
+    const h = Math.floor(abs / 60);
+    const m = abs % 60;
+    return `${sign}${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
   }
-  function onTouchMove(ev){
-    if(startX.current===null) return;
-    const dx = ev.touches[0].clientX - startX.current;
-    if(dx < 0) setOffsetX(Math.max(dx, -120));
-    else if(offsetX < 0) setOffsetX(Math.min(0, offsetX + dx));
-  }
-  function onTouchEnd(){
-    if(offsetX <= -THRESHOLD){
-      setOffsetX(-120);
-    } else {
-      setOffsetX(0);
+
+  function calcularDia(entradas) {
+    let total = 0;
+    for (const p of entradas) {
+      const e = toMinutes(p.entrada);
+      const s = toMinutes(p.saida);
+      if (e === null || s === null) continue;
+      if (s <= e) continue;
+      total += s - e;
     }
-    setSwiping(false);
-    startX.current = null;
-  }
-  function handleDelete(ev){
-    ev.stopPropagation();
-    onDelete();
-  }
-  function handleCardClick(){
-    if(offsetX !== 0){ setOffsetX(0); return; }
+    return { minutos: total };
   }
 
-  return e("div",{style:{position:"relative",overflow:"hidden",borderRadius:12,marginBottom:0}},
-    // delete button behind
-    e("div",{style:{
-      position:"absolute",right:0,top:0,bottom:0,width:120,
-      background:"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",
-      borderRadius:12,cursor:"pointer"
-    }, onClick:handleDelete},
-      e("div",{style:{fontSize:14,color:"#fff",fontWeight:700,letterSpacing:0.5}},"Deletar")
-    ),
-    // card on top
-    e("div",{
-      onTouchStart, onTouchMove, onTouchEnd,
-      onClick: offsetX!==0 ? handleCardClick : undefined,
+  function hoje() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function formatarData(iso) {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
+  const diasSemana = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  function diaSemana(iso) {
+    const d = new Date(iso + "T12:00:00");
+    return diasSemana[d.getDay()];
+  }
+
+  // Storage usando localStorage (compatível com PWA offline)
+  function storageGet(key) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+  }
+  function storageSet(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+
+  // ---- Estilos ----
+  const inputStyle = {
+    background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+    color:"#e2e8f0", padding:"8px 10px", fontSize:14, outline:"none",
+    width:"100%", colorScheme:"dark"
+  };
+  const btnBase = {
+    background:"#1e3a5f", border:"none", borderRadius:8,
+    color:"#e2e8f0", padding:"8px 14px", cursor:"pointer", fontSize:13
+  };
+
+  // ---- Componente ResumoCard ----
+  function ResumoCard({ trabalhados, jornada, diferenca, reaisDiff, valorMin }) {
+    const faltou = diferenca < 0;
+    const cor = faltou ? "#f87171" : "#22c55e";
+    return React.createElement("div", {
       style:{
-        transform:"translateX("+offsetX+"px)",
-        transition: swiping ? "none" : "transform 0.2s ease",
-        position:"relative", zIndex:1
+        background:"linear-gradient(135deg,#1e293b,#0f2540)",
+        borderRadius:16, padding:20,
+        border:`1px solid ${faltou?"#7f1d1d":"#14532d"}`
       }
-    }, children)
-  );
-}
-
-/* ── App ── */
-function App(){
-  const [config,  setConfig]  = useState({valorMinuto:"",jornada:480,saldoInicialSinal:"+",saldoInicialH:"",saldoInicialM:""});
-  const [regs,    setRegs]    = useState({});
-  const [data,    setData]    = useState(hoje());
-  const [tab,     setTab]     = useState("dia");
-  const [impSt,   setImpSt]   = useState(null);
-
-  useEffect(()=>{
-    const r=stGet(STORAGE_KEY); if(r) setRegs(r);
-    const c=stGet(CONFIG_KEY);  if(c) setConfig(prev=>({...prev,...c}));
-  },[]);
-
-  function salvarRegs(v){ setRegs(v); stSet(STORAGE_KEY,v); }
-  function salvarCfg(v){  setConfig(v); stSet(CONFIG_KEY,v); }
-
-  function exportar(){
-    const bk={versao:1,exportadoEm:new Date().toISOString(),config,registros:regs};
-    const url=URL.createObjectURL(new Blob([JSON.stringify(bk,null,2)],{type:"application/json"}));
-    const a=document.createElement("a");
-    a.href=url; a.download="ponto-backup-"+hoje()+".json"; a.click();
-    URL.revokeObjectURL(url);
-  }
-  function importar(ev){
-    const f=ev.target.files[0]; if(!f) return;
-    const rd=new FileReader();
-    rd.onload=e=>{
-      try{
-        const bk=JSON.parse(e.target.result);
-        if(!bk.registros||!bk.config) throw 0;
-        salvarRegs(bk.registros); salvarCfg({...config,...bk.config});
-        setImpSt("ok"); setTimeout(()=>setImpSt(null),3000);
-      }catch{ setImpSt("erro"); setTimeout(()=>setImpSt(null),3000); }
-    };
-    rd.readAsText(f); ev.target.value="";
-  }
-
-  const pares   = regs[data]||[{entrada:"",saida:""}];
-  const jornada = Number(config.jornada)||480;
-  const valorMin= parseFloat(config.valorMinuto)||0;
-  const trabMin = calcDia(pares);
-  const difMin  = trabMin-jornada;
-  const reaisDiff=Math.abs(difMin)*valorMin;
-
-  function setPares(v){ salvarRegs({...regs,[data]:v}); }
-  function updPar(i,campo,val){ setPares(pares.map((p,j)=>j===i?{...p,[campo]:val}:p)); }
-  function addPar(){ setPares([...pares,{entrada:"",saida:""}]); }
-  function delPar(i){ setPares(pares.length===1?[{entrada:"",saida:""}]:pares.filter((_,j)=>j!==i)); }
-  function delDia(d){ const novo={...regs}; delete novo[d]; salvarRegs(novo); }
-
-  const diasOrdenados=Object.keys(regs).sort((a,b)=>b.localeCompare(a));
-
-  const saldoInicialMin=(()=>{
-    const h=parseInt(config.saldoInicialH)||0;
-    const m=parseInt(config.saldoInicialM)||0;
-    const t=h*60+m;
-    return config.saldoInicialSinal==="-"?-t:t;
-  })();
-
-  const TABS=[["dia","📅 Dia"],["historico","📋 Histórico"],["config","⚙️ Configurar"]];
-
-  return e("div",{style:{minHeight:"100vh",background:"#0f172a",color:"#e2e8f0",display:"flex",flexDirection:"column",alignItems:"center",paddingBottom:40}},
-
-    /* header */
-    e("div",{style:{width:"100%",background:"linear-gradient(135deg,#1e293b,#0f172a)",borderBottom:"1px solid #1e3a5f",padding:"20px 24px 0",display:"flex",flexDirection:"column",alignItems:"center"}},
-      e("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:16}},
-        e("span",{style:{fontSize:26}},"🕐"),
-        e("span",{style:{fontSize:20,fontWeight:700,letterSpacing:"-0.5px",color:"#f1f5f9"}},"Controle de Ponto")
+    },
+      React.createElement("div",{style:{fontSize:13,color:"#94a3b8",marginBottom:12,fontWeight:500}},"Resumo do dia"),
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},
+        React.createElement("span",{style:{color:"#94a3b8",fontSize:14}},"Trabalhado"),
+        React.createElement("span",{style:{fontWeight:600,fontSize:14}},fromMinutes(trabalhados))
       ),
-      e("div",{style:{display:"flex",gap:2}},
-        TABS.map(([id,lbl])=>e("button",{key:id,onClick:()=>setTab(id),style:{
-          background:tab===id?"#3b82f6":"transparent",color:tab===id?"#fff":"#94a3b8",
-          border:"none",borderRadius:"8px 8px 0 0",padding:"8px 16px",cursor:"pointer",
-          fontWeight:tab===id?600:400,fontSize:13
-        }},lbl))
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:12}},
+        React.createElement("span",{style:{color:"#94a3b8",fontSize:14}},"Jornada"),
+        React.createElement("span",{style:{fontWeight:600,fontSize:14}},fromMinutes(jornada))
+      ),
+      React.createElement("div",{style:{height:1,background:"#1e3a5f",margin:"12px 0"}}),
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("span",{style:{color:cor,fontWeight:700,fontSize:15}}, faltou?"⚠️ Faltou":"✅ Banco"),
+        React.createElement("span",{style:{color:cor,fontWeight:800,fontSize:22}},
+          (diferenca>=0?"+":"")+fromMinutes(diferenca))
+      ),
+      valorMin > 0 && React.createElement("div",{style:{textAlign:"right",marginTop:4,fontSize:13,color:cor,opacity:0.85}},
+        faltou?"Desconto: ":"Banco em R$: ",
+        React.createElement("strong",null,"R$ "+reaisDiff.toFixed(2))
+      ),
+      trabalhados === 0 && React.createElement("div",{style:{fontSize:12,color:"#475569",marginTop:8,textAlign:"center"}},
+        "Preencha as batidas acima para calcular"
       )
-    ),
+    );
+  }
 
-    e("div",{style:{width:"100%",maxWidth:480,padding:"24px 16px 0"}},
+  // ---- App principal ----
+  function App() {
+    const [config, setConfig] = useState({ valorMinuto:"", jornada:480 });
+    const [registros, setRegistros] = useState({});
+    const [dataAtiva, setDataAtiva] = useState(hoje());
+    const [tab, setTab] = useState("dia");
+    const [importStatus, setImportStatus] = useState(null);
 
-      /* ── ABA DIA ── */
-      tab==="dia"&&e("div",{style:{display:"flex",flexDirection:"column",gap:16}},
-        e("div",{style:{display:"flex",alignItems:"center",gap:10}},
-          e("label",{style:{fontSize:13,color:"#94a3b8"}},"Data:"),
-          e("input",{type:"date",value:data,onChange:ev=>setData(ev.target.value),style:IS}),
-          e("button",{onClick:()=>setData(hoje()),style:{...BS,padding:"6px 10px",fontSize:12,color:"#60a5fa"}},"Hoje")
+    useEffect(() => {
+      const r = storageGet(STORAGE_KEY);
+      if (r) setRegistros(r);
+      const c = storageGet(CONFIG_KEY);
+      if (c) setConfig(c);
+    }, []);
+
+    function salvarRegistros(novo) { setRegistros(novo); storageSet(STORAGE_KEY, novo); }
+    function salvarConfig(nova) { setConfig(nova); storageSet(CONFIG_KEY, nova); }
+
+    function exportarBackup() {
+      const backup = { versao:1, exportadoEm:new Date().toISOString(), config, registros };
+      const blob = new Blob([JSON.stringify(backup,null,2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ponto-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importarBackup(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const backup = JSON.parse(ev.target.result);
+          if (!backup.registros || !backup.config) throw new Error();
+          salvarRegistros(backup.registros);
+          salvarConfig(backup.config);
+          setImportStatus("ok");
+          setTimeout(()=>setImportStatus(null),3000);
+        } catch {
+          setImportStatus("erro");
+          setTimeout(()=>setImportStatus(null),3000);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    }
+
+    const paresDodia = registros[dataAtiva] || [{entrada:"",saida:""}];
+    function setPares(novos) { salvarRegistros({...registros,[dataAtiva]:novos}); }
+    function atualizarPar(i,campo,valor) { setPares(paresDodia.map((p,idx)=>idx===i?{...p,[campo]:valor}:p)); }
+    function adicionarPar() { setPares([...paresDodia,{entrada:"",saida:""}]); }
+    function removerPar(i) {
+      if(paresDodia.length===1) setPares([{entrada:"",saida:""}]);
+      else setPares(paresDodia.filter((_,idx)=>idx!==i));
+    }
+
+    const { minutos: trabalhados } = calcularDia(paresDodia);
+    const jornada = Number(config.jornada)||480;
+    const diferenca = trabalhados - jornada;
+    const valorMin = parseFloat(config.valorMinuto)||0;
+    const reaisDiff = Math.abs(diferenca)*valorMin;
+    const diasOrdenados = Object.keys(registros).sort((a,b)=>b.localeCompare(a));
+
+    const e = React.createElement;
+    const tabs = [["dia","📅 Dia"],["historico","📋 Histórico"],["config","⚙️ Configurar"]];
+
+    return e("div",{style:{minHeight:"100vh",background:"#0f172a",color:"#e2e8f0",fontFamily:"'Inter','Segoe UI',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",paddingBottom:40}},
+
+      // Header
+      e("div",{style:{width:"100%",background:"linear-gradient(135deg,#1e293b,#0f172a)",borderBottom:"1px solid #1e3a5f",padding:"20px 24px 0",display:"flex",flexDirection:"column",alignItems:"center"}},
+        e("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:16}},
+          e("span",{style:{fontSize:26}},"🕐"),
+          e("span",{style:{fontSize:20,fontWeight:700,letterSpacing:"-0.5px",color:"#f1f5f9"}},"Controle de Ponto")
         ),
-        e("div",{style:{background:"#1e293b",borderRadius:14,padding:20,border:"1px solid #1e3a5f"}},
-          e("div",{style:{fontSize:13,color:"#94a3b8",marginBottom:14,fontWeight:500}},
-            "Batidas — "+fmtDia(data)+", "+fmtData(data)),
-          pares.map((par,i)=>e("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
-            e("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}},
-              e("span",{style:{fontSize:10,color:"#64748b"}},"ENTRADA"),
-              e("input",{type:"time",value:par.entrada,onChange:ev=>updPar(i,"entrada",ev.target.value),style:IS})
-            ),
-            e("span",{style:{color:"#3b82f6",fontSize:18,marginTop:14}},"→"),
-            e("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}},
-              e("span",{style:{fontSize:10,color:"#64748b"}},"SAÍDA"),
-              e("input",{type:"time",value:par.saida,onChange:ev=>updPar(i,"saida",ev.target.value),style:IS})
-            ),
-            e("button",{onClick:()=>delPar(i),style:{background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:18,marginTop:14,padding:"0 4px"}},"×")
-          )),
-          e("button",{onClick:addPar,style:{...BS,width:"100%",background:"#0f172a",border:"1px dashed #334155",color:"#60a5fa",marginTop:4}},
-            "+ Adicionar intervalo / outra entrada")
-        ),
-        e(ResumoCard,{trabalhados:trabMin,jornada,diferenca:difMin,reaisDiff,valorMin})
+        e("div",{style:{display:"flex",gap:2}},
+          tabs.map(([id,label])=>e("button",{
+            key:id, onClick:()=>setTab(id),
+            style:{
+              background:tab===id?"#3b82f6":"transparent",
+              color:tab===id?"#fff":"#94a3b8",
+              border:"none",borderRadius:"8px 8px 0 0",
+              padding:"8px 16px",cursor:"pointer",
+              fontWeight:tab===id?600:400,fontSize:13
+            }
+          },label))
+        )
       ),
 
-      /* ── ABA HISTÓRICO ── */
-      tab==="historico"&&(()=>{
-        const totalMin=saldoInicialMin+diasOrdenados.reduce((acc,d)=>acc+(calcDia(regs[d]||[])-jornada),0);
-        const totalReais=Math.abs(totalMin)*valorMin;
-        const pos=totalMin>=0;
-        return e("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+      // Conteúdo
+      e("div",{style:{width:"100%",maxWidth:480,padding:"24px 16px 0"}},
 
-          diasOrdenados.length>0&&e("div",{style:{
-            background:pos?"linear-gradient(135deg,#052e16,#0f172a)":"linear-gradient(135deg,#450a0a,#0f172a)",
-            border:"1px solid "+(pos?"#16a34a":"#dc2626"),borderRadius:16,padding:20,marginBottom:6
-          }},
-            e("div",{style:{fontSize:12,color:"#94a3b8",fontWeight:500,marginBottom:10,letterSpacing:1}},
-              "SALDO ACUMULADO — "+diasOrdenados.length+" DIA(S)"+(saldoInicialMin!==0?" + saldo inicial":"")),
-            e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}},
-              e("div",null,
-                e("div",{style:{fontSize:34,fontWeight:800,color:pos?"#4ade80":"#f87171",letterSpacing:"-1px",lineHeight:1}},
-                  (pos?"+":"")+fromMin(totalMin)),
-                e("div",{style:{fontSize:12,color:"#64748b",marginTop:4}},pos?"banco de horas":"horas em débito")
-              ),
-              valorMin>0&&e("div",{style:{textAlign:"right"}},
-                e("div",{style:{fontSize:22,fontWeight:700,color:pos?"#4ade80":"#f87171"}},"R$ "+totalReais.toFixed(2)),
-                e("div",{style:{fontSize:12,color:"#64748b",marginTop:2}},pos?"a receber / banco":"a compensar")
-              )
-            )
+        // ---- ABA DIA ----
+        tab==="dia" && e("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+          e("div",{style:{display:"flex",alignItems:"center",gap:10}},
+            e("label",{style:{fontSize:13,color:"#94a3b8"}},"Data:"),
+            e("input",{type:"date",value:dataAtiva,onChange:ev=>setDataAtiva(ev.target.value),style:inputStyle}),
+            e("button",{onClick:()=>setDataAtiva(hoje()),style:{...btnBase,padding:"6px 10px",fontSize:12,background:"#1e3a5f",color:"#60a5fa"}},"Hoje")
           ),
+          e("div",{style:{background:"#1e293b",borderRadius:14,padding:20,border:"1px solid #1e3a5f"}},
+            e("div",{style:{fontSize:13,color:"#94a3b8",marginBottom:14,fontWeight:500}},
+              `Batidas — ${diaSemana(dataAtiva)}, ${formatarData(dataAtiva)}`),
+            paresDodia.map((par,i)=>e("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
+              e("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}},
+                e("span",{style:{fontSize:10,color:"#64748b"}},"ENTRADA"),
+                e("input",{type:"time",value:par.entrada,onChange:ev=>atualizarPar(i,"entrada",ev.target.value),style:inputStyle})
+              ),
+              e("span",{style:{color:"#3b82f6",fontSize:18,marginTop:14}},"→"),
+              e("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1}},
+                e("span",{style:{fontSize:10,color:"#64748b"}},"SAÍDA"),
+                e("input",{type:"time",value:par.saida,onChange:ev=>atualizarPar(i,"saida",ev.target.value),style:inputStyle})
+              ),
+              e("button",{onClick:()=>removerPar(i),style:{background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:18,marginTop:14,padding:"0 4px",lineHeight:1}},"×")
+            )),
+            e("button",{onClick:adicionarPar,style:{...btnBase,width:"100%",background:"#0f172a",border:"1px dashed #334155",color:"#60a5fa",marginTop:4}},
+              "+ Adicionar intervalo / outra entrada")
+          ),
+          e(ResumoCard,{trabalhados,jornada,diferenca,reaisDiff,valorMin})
+        ),
 
-          e("div",{style:{fontSize:13,color:"#94a3b8",marginBottom:4}},
-            diasOrdenados.length===0?"Nenhum registro ainda.":"Detalhamento por dia"),
-
-          diasOrdenados.map(d=>{
-            const min=calcDia(regs[d]||[]);
-            const diff=min-jornada;
-            const reais=Math.abs(diff)*valorMin;
-            return e(SwipeCard,{key:d, onDelete:()=>delDia(d)},
-              e("div",{onClick:()=>{setData(d);setTab("dia");},
-                style:{background:"#1e293b",border:"1px solid #1e3a5f",borderRadius:12,
-                  padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        // ---- ABA HISTÓRICO ----
+        tab==="historico" && (()=>{
+          const totalAcumMin = diasOrdenados.reduce((acc,d)=>{
+            const {minutos}=calcularDia(registros[d]||[]);
+            return acc+(minutos-jornada);
+          },0);
+          const totalAcumReais = Math.abs(totalAcumMin)*valorMin;
+          const acumPos = totalAcumMin>=0;
+          return e("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+            diasOrdenados.length>0 && e("div",{style:{
+              background:acumPos?"linear-gradient(135deg,#052e16,#0f172a)":"linear-gradient(135deg,#450a0a,#0f172a)",
+              border:`1px solid ${acumPos?"#16a34a":"#dc2626"}`,
+              borderRadius:16,padding:20,marginBottom:6
+            }},
+              e("div",{style:{fontSize:12,color:"#94a3b8",fontWeight:500,marginBottom:10,letterSpacing:1}},
+                `SALDO ACUMULADO — ${diasOrdenados.length} DIA(S)`),
+              e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}},
                 e("div",null,
-                  e("div",{style:{fontWeight:600,fontSize:14}},fmtDia(d)+", "+fmtData(d)),
-                  e("div",{style:{fontSize:12,color:"#64748b",marginTop:2}},"Trabalhado: "+fromMin(min))
+                  e("div",{style:{fontSize:34,fontWeight:800,color:acumPos?"#4ade80":"#f87171",letterSpacing:"-1px",lineHeight:1}},
+                    (acumPos?"+":"")+fromMinutes(totalAcumMin)),
+                  e("div",{style:{fontSize:12,color:"#64748b",marginTop:4}},
+                    acumPos?"banco de horas":"horas em débito")
                 ),
-                e("div",{style:{textAlign:"right"}},
-                  e("div",{style:{fontWeight:700,fontSize:15,color:diff>=0?"#22c55e":"#f87171"}},(diff>=0?"+":"")+fromMin(diff)),
-                  valorMin>0&&e("div",{style:{fontSize:12,color:"#64748b"}},(diff>=0?"banco":"falta")+": R$ "+reais.toFixed(2))
+                valorMin>0 && e("div",{style:{textAlign:"right"}},
+                  e("div",{style:{fontSize:22,fontWeight:700,color:acumPos?"#4ade80":"#f87171"}},
+                    "R$ "+totalAcumReais.toFixed(2)),
+                  e("div",{style:{fontSize:12,color:"#64748b",marginTop:2}},
+                    acumPos?"a receber / banco":"a compensar")
                 )
               )
-            );
-          })
-        );
-      })(),
-
-      /* ── ABA CONFIG ── */
-      tab==="config"&&e("div",{style:{display:"flex",flexDirection:"column",gap:16}},
-        e("div",{style:{background:"#1e293b",borderRadius:14,padding:20,border:"1px solid #1e3a5f"}},
-          e("div",{style:{fontSize:14,fontWeight:600,marginBottom:16,color:"#f1f5f9"}},"Configurações"),
-
-          /* jornada */
-          e("div",{style:{marginBottom:16}},
-            e("label",{style:LS},"Jornada diária (horas)"),
-            e("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginTop:6}},
-              [6,7,8,9].map(h=>e("button",{key:h,onClick:()=>salvarCfg({...config,jornada:h*60}),style:{
-                ...BS,background:config.jornada===h*60?"#3b82f6":"#0f172a",
-                border:"1px solid "+(config.jornada===h*60?"#3b82f6":"#334155"),
-                color:config.jornada===h*60?"#fff":"#94a3b8",fontWeight:config.jornada===h*60?700:400
-              }},h+"h"))
             ),
-            e("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:8}},
-              e("span",{style:{fontSize:12,color:"#64748b"}},"Outro:"),
-              e("input",{type:"number",min:1,max:12,placeholder:"horas",
-                value:[6,7,8,9].map(h=>h*60).includes(config.jornada)?"":config.jornada/60,
-                onChange:ev=>salvarCfg({...config,jornada:Math.round(Number(ev.target.value)*60)}),
-                style:{...IS,width:70}}),
-              e("span",{style:{fontSize:12,color:"#64748b"}},"horas")
-            )
-          ),
+            e("div",{style:{fontSize:13,color:"#94a3b8",marginBottom:4}},
+              diasOrdenados.length===0?"Nenhum registro ainda.":"Detalhamento por dia"),
+            diasOrdenados.map(data=>{
+              const pares=registros[data]||[];
+              const {minutos}=calcularDia(pares);
+              const diff=minutos-jornada;
+              const reais=Math.abs(diff)*valorMin;
+              return e("div",{key:data,onClick:()=>{setDataAtiva(data);setTab("dia");},
+                style:{background:"#1e293b",border:"1px solid #1e3a5f",borderRadius:12,
+                  padding:"14px 16px",cursor:"pointer",display:"flex",
+                  justifyContent:"space-between",alignItems:"center"}},
+                e("div",null,
+                  e("div",{style:{fontWeight:600,fontSize:14}},`${diaSemana(data)}, ${formatarData(data)}`),
+                  e("div",{style:{fontSize:12,color:"#64748b",marginTop:2}},`Trabalhado: ${fromMinutes(minutos)}`)
+                ),
+                e("div",{style:{textAlign:"right"}},
+                  e("div",{style:{fontWeight:700,fontSize:15,color:diff>=0?"#22c55e":"#f87171"}},
+                    (diff>=0?"+":"")+fromMinutes(diff)),
+                  valorMin>0 && e("div",{style:{fontSize:12,color:"#64748b"}},
+                    `${diff>=0?"banco":"falta"}: R$ ${reais.toFixed(2)}`)
+                )
+              );
+            })
+          );
+        })(),
 
-          /* saldo inicial */
-          e("div",{style:{marginBottom:16}},
-            e("label",{style:LS},"Saldo inicial (horas anteriores)"),
-            e("div",{style:{fontSize:12,color:"#475569",margin:"4px 0 8px"}},"Banco de horas que você já tinha antes de usar o app. Use − se estava devendo."),
-            e("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
-              e("select",{value:config.saldoInicialSinal??"+",onChange:ev=>salvarCfg({...config,saldoInicialSinal:ev.target.value}),style:{...IS,width:60}},
-                e("option",{value:"+"},"+"),
-                e("option",{value:"-"},"−")
+        // ---- ABA CONFIG ----
+        tab==="config" && e("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+          e("div",{style:{background:"#1e293b",borderRadius:14,padding:20,border:"1px solid #1e3a5f"}},
+            e("div",{style:{fontSize:14,fontWeight:600,marginBottom:16,color:"#f1f5f9"}},"Configurações"),
+            e("div",{style:{marginBottom:16}},
+              e("label",{style:{fontSize:13,color:"#94a3b8",fontWeight:500}},"Jornada diária (horas)"),
+              e("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginTop:6}},
+                [6,7,8,9].map(h=>e("button",{key:h,onClick:()=>salvarConfig({...config,jornada:h*60}),
+                  style:{...btnBase,
+                    background:config.jornada===h*60?"#3b82f6":"#0f172a",
+                    border:`1px solid ${config.jornada===h*60?"#3b82f6":"#334155"}`,
+                    color:config.jornada===h*60?"#fff":"#94a3b8",
+                    fontWeight:config.jornada===h*60?700:400}},h+"h"))
               ),
-              e("input",{type:"number",min:"0",placeholder:"horas",value:config.saldoInicialH??"",
-                onChange:ev=>salvarCfg({...config,saldoInicialH:ev.target.value}),style:{...IS,width:80}}),
-              e("span",{style:{fontSize:13,color:"#64748b"}},"h"),
-              e("input",{type:"number",min:"0",max:"59",placeholder:"min",value:config.saldoInicialM??"",
-                onChange:ev=>salvarCfg({...config,saldoInicialM:ev.target.value}),style:{...IS,width:80}}),
-              e("span",{style:{fontSize:13,color:"#64748b"}},"min")
-            )
-          ),
-
-          /* valor minuto */
-          e("div",null,
-            e("label",{style:LS},"Valor por minuto (R$)"),
-            e("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:6}},
-              e("span",{style:{color:"#64748b",fontSize:14}},"R$"),
-              e("input",{type:"number",step:"0.01",min:"0",placeholder:"ex: 0.35",value:config.valorMinuto,
-                onChange:ev=>salvarCfg({...config,valorMinuto:ev.target.value}),style:{...IS,width:110}}),
-              e("span",{style:{fontSize:12,color:"#64748b"}},"/ minuto")
+              e("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:8}},
+                e("span",{style:{fontSize:12,color:"#64748b"}},"Outro:"),
+                e("input",{type:"number",min:1,max:12,placeholder:"horas",
+                  value:([6,7,8,9].map(h=>h*60).includes(config.jornada))?"":config.jornada/60,
+                  onChange:ev=>salvarConfig({...config,jornada:Math.round(Number(ev.target.value)*60)}),
+                  style:{...inputStyle,width:70}}),
+                e("span",{style:{fontSize:12,color:"#64748b"}},"horas")
+              )
             ),
-            config.valorMinuto>0&&e("div",{style:{fontSize:12,color:"#94a3b8",marginTop:6}},"= R$ "+(config.valorMinuto*60).toFixed(2)+"/hora"),
-            e("div",{style:{fontSize:12,color:"#475569",marginTop:8}},
-              "Não sabe o valor? Divida seu salário-hora por 60.",
-              e("br"),
-              "Ex: R$ 21/hora → R$ 0,35/minuto"
+            e("div",null,
+              e("label",{style:{fontSize:13,color:"#94a3b8",fontWeight:500}},"Valor por minuto (R$)"),
+              e("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:6}},
+                e("span",{style:{color:"#64748b",fontSize:14}},"R$"),
+                e("input",{type:"number",step:"0.01",min:"0",placeholder:"ex: 0.35",
+                  value:config.valorMinuto,
+                  onChange:ev=>salvarConfig({...config,valorMinuto:ev.target.value}),
+                  style:{...inputStyle,width:110}}),
+                e("span",{style:{fontSize:12,color:"#64748b"}},"/ minuto")
+              ),
+              config.valorMinuto>0 && e("div",{style:{fontSize:12,color:"#94a3b8",marginTop:6}},
+                `= R$ ${(config.valorMinuto*60).toFixed(2)}/hora`),
+              e("div",{style:{fontSize:12,color:"#475569",marginTop:8}},
+                "Não sabe o valor? Divida seu salário-hora por 60.",
+                e("br"),
+                "Ex: R$ 21/hora → R$ 0,35/minuto")
             )
-          )
-        ),
-
-        /* backup */
-        e("div",{style:{background:"#1e293b",borderRadius:14,padding:20,border:"1px solid #1e3a5f"}},
-          e("div",{style:{fontSize:14,fontWeight:600,marginBottom:6,color:"#f1f5f9"}},"Backup"),
-          e("div",{style:{fontSize:12,color:"#64748b",marginBottom:16}},"Exporte um arquivo .json para salvar seus dados. Para restaurar, importe o mesmo arquivo."),
-          e("button",{onClick:exportar,style:{...BS,width:"100%",background:"#1e3a5f",color:"#60a5fa",border:"1px solid #2563eb",fontWeight:600,fontSize:14,padding:"12px",marginBottom:10}},"⬇️ Exportar backup"),
-          e("label",{style:{display:"block",width:"100%",background:"#0f172a",color:"#94a3b8",border:"1px dashed #334155",borderRadius:8,padding:"12px",textAlign:"center",cursor:"pointer",fontSize:14,fontWeight:600}},
-            "⬆️ Importar backup",
-            e("input",{type:"file",accept:".json",onChange:importar,style:{display:"none"}})
           ),
-          impSt==="ok"&&e("div",{style:{marginTop:10,background:"#052e16",border:"1px solid #16a34a",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#4ade80"}},"✅ Backup importado com sucesso! Dados restaurados."),
-          impSt==="erro"&&e("div",{style:{marginTop:10,background:"#450a0a",border:"1px solid #dc2626",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#f87171"}},"❌ Arquivo inválido. Use um backup exportado por este app.")
+          // Backup
+          e("div",{style:{background:"#1e293b",borderRadius:14,padding:20,border:"1px solid #1e3a5f"}},
+            e("div",{style:{fontSize:14,fontWeight:600,marginBottom:6,color:"#f1f5f9"}},"Backup"),
+            e("div",{style:{fontSize:12,color:"#64748b",marginBottom:16}},
+              "Exporte um arquivo .json para salvar seus dados. Para restaurar, importe o mesmo arquivo."),
+            e("button",{onClick:exportarBackup,style:{
+              ...btnBase,width:"100%",background:"#1e3a5f",color:"#60a5fa",
+              border:"1px solid #2563eb",fontWeight:600,fontSize:14,
+              padding:"12px",marginBottom:10
+            }},"⬇️ Exportar backup"),
+            e("label",{style:{
+              display:"block",width:"100%",background:"#0f172a",color:"#94a3b8",
+              border:"1px dashed #334155",borderRadius:8,padding:"12px",
+              textAlign:"center",cursor:"pointer",fontSize:14,fontWeight:600
+            }},
+              "⬆️ Importar backup",
+              e("input",{type:"file",accept:".json",onChange:importarBackup,style:{display:"none"}})
+            ),
+            importStatus==="ok" && e("div",{style:{marginTop:10,background:"#052e16",border:"1px solid #16a34a",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#4ade80"}},
+              "✅ Backup importado com sucesso! Dados restaurados."),
+            importStatus==="erro" && e("div",{style:{marginTop:10,background:"#450a0a",border:"1px solid #dc2626",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#f87171"}},
+              "❌ Arquivo inválido. Use um backup exportado por este app.")
+          )
         )
       )
-    )
-  );
-}
+    );
+  }
 
-ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+  ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 
-if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js"); }
-</script>
+  // Service Worker para PWA offline
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
+  }
+  </script>
 </body>
 </html>
