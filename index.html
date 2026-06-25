@@ -55,40 +55,8 @@ function fmtData(iso){ const[y,m,d]=iso.split("-"); return d+"/"+m+"/"+y; }
 const DS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 function fmtDia(iso){ return DS[new Date(iso+"T12:00:00").getDay()]; }
 
-/* ── IndexedDB storage (persistente, nao apagado por limpeza de cookies) ── */
-const DB_NAME="pontoDB", DB_VER=1, STORE="dados";
-let _db=null;
-function openDB(){
-  if(_db) return Promise.resolve(_db);
-  return new Promise((res,rej)=>{
-    const req=indexedDB.open(DB_NAME,DB_VER);
-    req.onupgradeneeded=ev=>ev.target.result.createObjectStore(STORE);
-    req.onsuccess=ev=>{ _db=ev.target.result; res(_db); };
-    req.onerror=rej;
-  });
-}
-async function stGet(k){
-  try{
-    const db=await openDB();
-    return new Promise((res,rej)=>{
-      const tx=db.transaction(STORE,"readonly");
-      const req=tx.objectStore(STORE).get(k);
-      req.onsuccess=()=>res(req.result??null);
-      req.onerror=rej;
-    });
-  }catch{ return null; }
-}
-async function stSet(k,v){
-  try{
-    const db=await openDB();
-    return new Promise((res,rej)=>{
-      const tx=db.transaction(STORE,"readwrite");
-      const req=tx.objectStore(STORE).put(v,k);
-      req.onsuccess=()=>res();
-      req.onerror=rej;
-    });
-  }catch{}
-}
+function stGet(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch{return null;} }
+function stSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
 
 /* ── estilos base ── */
 const IS = { background:"#0f172a",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"8px 10px",fontSize:14,outline:"none",width:"100%",colorScheme:"dark" };
@@ -186,10 +154,8 @@ function App(){
   const [impSt,   setImpSt]   = useState(null);
 
   useEffect(()=>{
-    (async()=>{
-      const r=await stGet(STORAGE_KEY); if(r) setRegs(r);
-      const c=await stGet(CONFIG_KEY);  if(c) setConfig(prev=>({...prev,...c}));
-    })();
+    const r=stGet(STORAGE_KEY); if(r) setRegs(r);
+    const c=stGet(CONFIG_KEY);  if(c) setConfig(prev=>({...prev,...c}));
   },[]);
 
   function salvarRegs(v){ setRegs(v); stSet(STORAGE_KEY,v); }
