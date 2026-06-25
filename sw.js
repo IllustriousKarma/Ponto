@@ -1,20 +1,36 @@
-const CACHE = "ponto-v1";
-const FILES = ["/", "/index.html", "/manifest.json"];
+const CACHE = "ponto-v2";
+const BASE  = "/ponto/";
+const FILES = [
+  BASE,
+  BASE + "index.html",
+  BASE + "manifest.json",
+  BASE + "icon-192.png",
+  BASE + "icon-512.png"
+];
 
-self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
-  self.skipWaiting();
+self.addEventListener("install", ev => {
+  ev.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener("activate", e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
+self.addEventListener("activate", ev => {
+  ev.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener("fetch", e => {
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+self.addEventListener("fetch", ev => {
+  ev.respondWith(
+    caches.match(ev.request).then(cached => cached || fetch(ev.request).then(res => {
+      // cacheia dinamicamente qualquer recurso do nosso escopo
+      if(ev.request.url.includes(BASE)){
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(ev.request, clone));
+      }
+      return res;
+    }))
   );
 });
